@@ -1,0 +1,12 @@
+import fs from 'fs';import {createWalletClient,createPublicClient,http,parseEther} from 'viem';import {privateKeyToAccount} from 'viem/accounts';import {sepolia} from 'viem/chains';
+const A=JSON.parse(fs.readFileSync('artifacts.json'));const rpc=http('https://ethereum-sepolia-rpc.publicnode.com');
+const pk=fs.readFileSync('/workspace/paybox/.escrow-testnet.txt','utf8').match(/0x[0-9a-fA-F]{64}/)[0];
+const tw=JSON.parse(fs.readFileSync('/workspace/paybox/.test-wallets.json'));
+const keeper=privateKeyToAccount(pk);const seller=tw.payer.address,buyer=tw.payee.address;
+const pub=createPublicClient({chain:sepolia,transport:rpc});const w=createWalletClient({account:keeper,chain:sepolia,transport:rpc});
+const dep=async(n,args=[])=>{const h=await w.deployContract({abi:A[n].abi,bytecode:A[n].bytecode,args});const r=await pub.waitForTransactionReceipt({hash:h});console.log(n,r.contractAddress,h);return r.contractAddress};
+const ex=await dep('SltpExecutor',[keeper.address]);const nft=await dep('TestNFT');const weth=await dep('TestWETH');
+const tx=async(addr,n,fn,args)=>{const h=await w.writeContract({address:addr,abi:A[n].abi,functionName:fn,args});await pub.waitForTransactionReceipt({hash:h});console.log(fn,h);return h};
+await tx(nft,'TestNFT','mint',[seller,5n]);await tx(weth,'TestWETH','mint',[buyer,parseEther('100')]);
+const g=await w.sendTransaction({to:buyer,value:parseEther('0.004')});await pub.waitForTransactionReceipt({hash:g});console.log('gas->buyer',g);
+fs.writeFileSync('deployed.json',JSON.stringify({executor:ex,nft,weth,keeper:keeper.address,seller,buyer},null,1));
